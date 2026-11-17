@@ -1,0 +1,107 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    // Single-admin exclusivity: ONLY jaelove363@gmail.com (verified Google token)
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'jaelove363@gmail.com';
+    }
+
+    // --- Validation Blueprints ---
+    function isValidPlayerLock(data, lockId) {
+      return data.keys().hasAll(['lockKey', 'playerKey', 'mode', 'hasPlayed', 'createdAt'])
+        && data.keys().hasOnly(['lockKey', 'playerKey', 'mode', 'hasPlayed', 'createdAt'])
+        && data.lockKey is string
+        && data.lockKey.size() >= 6
+        && data.lockKey.size() <= 128
+        && data.lockKey == lockId
+        && data.lockKey.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.playerKey is string
+        && data.playerKey.size() >= 4
+        && data.playerKey.size() <= 100
+        && data.playerKey.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.mode is string
+        && data.mode in ['match_board', 'quick_quiz']
+        && data.lockKey == data.playerKey + '__' + data.mode
+        && data.hasPlayed is bool
+        && data.hasPlayed == true
+        && data.createdAt is timestamp
+        && data.createdAt == request.time;
+    }
+
+    function isValidGameResult(data) {
+      return data.keys().hasAll([
+          'playerKey', 'firstName', 'lastName', 'fullName',
+          'mode', 'timerMode', 'score', 'accuracy', 'maxCombo',
+          'mistakes', 'wrongAnswers', 'matchedCount', 'elapsedSeconds', 'reason', 'rank', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'playerKey', 'firstName', 'lastName', 'fullName',
+          'mode', 'timerMode', 'score', 'accuracy', 'maxCombo',
+          'mistakes', 'wrongAnswers', 'matchedCount', 'elapsedSeconds', 'reason', 'rank', 'createdAt'
+        ])
+        && data.playerKey is string && data.playerKey.size() >= 4 && data.playerKey.size() <= 100 && data.playerKey.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.firstName is string && data.firstName.size() >= 1 && data.firstName.size() <= 60
+        && data.lastName is string && data.lastName.size() >= 1 && data.lastName.size() <= 60
+        && data.fullName is string && data.fullName.size() >= 2 && data.fullName.size() <= 125
+        && data.mode is string && data.mode in ['match_board', 'quick_quiz']
+        && data.timerMode is string && data.timerMode in ['chill', 'sprint']
+        && data.score is int && data.score >= 0 && data.score <= 10000
+        && data.accuracy is int && data.accuracy >= 0 && data.accuracy <= 100
+        && data.maxCombo is int && data.maxCombo >= 1 && data.maxCombo <= 20
+        && data.mistakes is int && data.mistakes >= 0 && data.mistakes <= 100
+        && data.wrongAnswers is list && data.wrongAnswers.size() <= 30
+        && (data.wrongAnswers.size() == 0 || (data.wrongAnswers[0] is string && data.wrongAnswers[0].size() >= 1 && data.wrongAnswers[0].size() <= 220))
+        && data.matchedCount is int && data.matchedCount >= 0 && data.matchedCount <= 4
+        && data.elapsedSeconds is int && data.elapsedSeconds >= 0 && data.elapsedSeconds <= 3600
+        && data.reason is string && data.reason in ['completed', 'timeout']
+        && data.rank is string && data.rank in ['S', 'A', 'B']
+        && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    // --- Collection: playerLocks ({playerKey}__{mode}) ---
+    match /playerLocks/{lockKey} {
+      allow get: if isValidId(lockKey);
+      allow list: if isAdmin();
+
+      allow create: if isValidId(lockKey)
+        && isValidPlayerLock(incoming(), lockKey);
+
+      allow update: if false;
+      allow delete: if isValidId(lockKey) && isAdmin();
+    }
+
+    // --- Collection: gameResults ---
+    match /gameResults/{resultId} {
+      allow get: if isValidId(resultId) && isAdmin();
+      allow list: if isAdmin();
+
+      allow create: if isValidId(resultId)
+        && isValidGameResult(incoming())
+        && !exists(/databases/$(database)/documents/playerLocks/$(incoming().playerKey + '__' + incoming().mode))
+        && existsAfter(/databases/$(database)/documents/playerLocks/$(incoming().playerKey + '__' + incoming().mode));
+
+      allow update: if false;
+      allow delete: if isValidId(resultId) && isAdmin();
+    }
+  }
+}

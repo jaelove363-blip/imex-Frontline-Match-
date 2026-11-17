@@ -1,0 +1,153 @@
+{
+  "entities": {
+    "PlayerLock": {
+      "title": "PlayerLock",
+      "description": "Server-enforced per-game play lock keyed by {playerKey}__{mode} (contains no PII).",
+      "type": "object",
+      "properties": {
+        "lockKey": {
+          "type": "string",
+          "description": "Composite deterministic lock ID: {playerKey}__{mode}",
+          "minLength": 6,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "playerKey": {
+          "type": "string",
+          "description": "Deterministic alphanumeric hash derived from normalized First Name + Last Name",
+          "minLength": 4,
+          "maxLength": 100,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["match_board", "quick_quiz"],
+          "description": "The specific game mode locked for this player"
+        },
+        "hasPlayed": {
+          "type": "boolean",
+          "description": "Always true once the player completes or times out of this specific game mode"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the player completed this game mode"
+        }
+      },
+      "required": ["lockKey", "playerKey", "mode", "hasPlayed", "createdAt"]
+    },
+    "GameResult": {
+      "title": "GameResult",
+      "description": "Single-play-per-game result record submitted by an employee using First Name and Last Name.",
+      "type": "object",
+      "properties": {
+        "playerKey": {
+          "type": "string",
+          "description": "Deterministic alphanumeric hash derived from First Name + Last Name",
+          "minLength": 4,
+          "maxLength": 100,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "Employee first name (ชื่อ)",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "lastName": {
+          "type": "string",
+          "description": "Employee last name (นามสกุล)",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Combined First Name and Last Name",
+          "minLength": 2,
+          "maxLength": 125
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["match_board", "quick_quiz"],
+          "description": "Game mode played"
+        },
+        "timerMode": {
+          "type": "string",
+          "enum": ["chill", "sprint"],
+          "description": "Timer mode played"
+        },
+        "score": {
+          "type": "integer",
+          "description": "Total points scored (0-10000)"
+        },
+        "accuracy": {
+          "type": "integer",
+          "description": "Accuracy percentage (0-100)"
+        },
+        "maxCombo": {
+          "type": "integer",
+          "description": "Maximum consecutive correct answers (1-20)"
+        },
+        "mistakes": {
+          "type": "integer",
+          "description": "Number of wrong or decoy selections (0-100)"
+        },
+        "wrongAnswers": {
+          "type": "array",
+          "description": "Bounded list (max 30 items, <= 220 chars each) detailing which question/card the player clicked wrong"
+        },
+        "matchedCount": {
+          "type": "integer",
+          "description": "Number of scenarios matched (0-4)"
+        },
+        "elapsedSeconds": {
+          "type": "integer",
+          "description": "Elapsed play time in seconds (0-3600)"
+        },
+        "reason": {
+          "type": "string",
+          "enum": ["completed", "timeout"],
+          "description": "How the round ended"
+        },
+        "rank": {
+          "type": "string",
+          "enum": ["S", "A", "B"],
+          "description": "Performance rank earned"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when score was recorded"
+        }
+      },
+      "required": [
+        "playerKey",
+        "firstName",
+        "lastName",
+        "fullName",
+        "mode",
+        "timerMode",
+        "score",
+        "accuracy",
+        "maxCombo",
+        "mistakes",
+        "wrongAnswers",
+        "matchedCount",
+        "elapsedSeconds",
+        "reason",
+        "rank",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/playerLocks/{lockKey}": {
+      "schema": { "$ref": "#/entities/PlayerLock" },
+      "description": "One-play-per-game lock keyed by {playerKey}__{mode}. Allows each employee to play both Game 1 and Game 2 once each."
+    },
+    "/gameResults/{resultId}": {
+      "schema": { "$ref": "#/entities/GameResult" },
+      "description": "Employee game scores and wrong-answer logs. Write-once atomically with playerLocks; readable exclusively by the single designated admin."
+    }
+  }
+}

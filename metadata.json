@@ -1,0 +1,6 @@
+{
+  "name": "IMEX Frontline Match",
+  "description": "เกมจับคู่สถานการณ์หน้างานจริงสำหรับพนักงาน IMEX พร้อมภาพคำถาม ภาพวิธีแก้ไขที่ถูกต้อง และภาพคำตอบหลอก",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
